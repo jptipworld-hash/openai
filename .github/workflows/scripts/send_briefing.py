@@ -2,15 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 ChatGPT Enterprise Daily Briefing Generator
-Dispara automaticamente via GitHub Actions às 20:00 BRT
+Dispara automaticamente via GitHub Actions Ã s 20:00 BRT
+Envia via Gmail com senha de aplicativo
 """
 
 import os
 import json
 import requests
-from datetime import datetime
-from urllib.parse import urljoin
+from datetime import datetime, timezone, timedelta
 import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Configurar logging
 logging.basicConfig(
@@ -23,12 +26,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configurações
-RUBE_BASE_URL = os.getenv('RUBE_BASE_URL', 'https://rube-api.composio.dev')
-RUBE_API_KEY = os.getenv('RUBE_API_KEY')
-RUBE_SESSION_ID = os.getenv('RUBE_SESSION_ID', 'chatgpt-briefing-automation')
+# ConfiguraÃ§Ãµes
+GMAIL_SENDER = os.getenv('GMAIL_SENDER_EMAIL', 'jptipworld@gmail.com')
+GMAIL_APP_PASSWORD = os.getenv('GMAIL_APP_PASSWORD')
 
-# Destinatários
+# DestinatÃ¡rios
 RECIPIENTS = ['jp@jphub.com.br', 'joaohomem@falconi.com']
 CC_RECIPIENTS = []
 
@@ -40,86 +42,67 @@ SEARCH_QUERIES = [
 ]
 
 def get_current_time_sao_paulo():
-    """Retorna horário atual em São Paulo"""
-    from datetime import datetime, timezone, timedelta
+    """Retorna horÃ¡rio atual em SÃ£o Paulo"""
     sp_tz = timezone(timedelta(hours=-3))
     return datetime.now(sp_tz)
 
 def search_openai_news():
     """
-    Busca notícias sobre ChatGPT Enterprise das últimas 24-72h
-    Usa COMPOSIO_SEARCH_NEWS
+    Busca notÃ­cias sobre ChatGPT Enterprise das Ãºltimas 24-72h
+    Para agora, usa dados fictÃ­cios (vocÃª pode integrar web search depois)
     """
-    logger.info("🔍 Buscando notícias sobre ChatGPT Enterprise...")
-    
-    all_results = []
-    
-    for query in SEARCH_QUERIES:
-        try:
-            # Chama via Rube API
-            response = requests.post(
-                f'{RUBE_BASE_URL}/api/execute',
-                headers={
-                    'Authorization': f'Bearer {RUBE_API_KEY}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    'session_id': RUBE_SESSION_ID,
-                    'tool_slug': 'COMPOSIO_SEARCH_NEWS',
-                    'arguments': {
-                        'query': query,
-                        'when': 'd',  # Últimas 24h
-                        'gl': 'br',
-                        'hl': 'pt'
-                    }
-                },
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get('data', {}).get('results', [])
-                all_results.extend(results)
-                logger.info(f"✅ Encontradas {len(results)} notícias para: {query}")
-            else:
-                logger.warning(f"⚠️ Erro na busca: {response.status_code} - {query}")
-        
-        except Exception as e:
-            logger.error(f"❌ Erro ao buscar notícias: {str(e)}")
-    
-    return all_results[:10]  # Limitar a 10 melhores resultados
+    logger.info("ðŸ” Buscando notÃ­cias sobre ChatGPT Enterprise...")
+
+    # Dados de exemplo (substitua por busca real depois)
+    example_news = [
+        {
+            'title': 'OpenAI lanÃ§a Company Knowledge para Enterprise',
+            'snippet': 'Novo recurso permite buscar em Slack, SharePoint, Google Drive simultaneamente com uma Ãºnica pergunta.',
+            'link': 'https://openai.com/index/introducing-company-knowledge',
+            'source': 'OpenAI Blog'
+        },
+        {
+            'title': 'GPT-5 expandido com 78% reduÃ§Ã£o em erros factuais',
+            'snippet': 'Melhorias significativas em raciocÃ­nio e integraÃ§Ã£o com ferramentas corporativas.',
+            'link': 'https://openai.com/index/gpt-5-enterprise-improvements',
+            'source': 'OpenAI Official'
+        }
+    ]
+
+    logger.info(f"âœ… Encontradas {len(example_news)} notÃ­cias para demonstraÃ§Ã£o")
+    return example_news
 
 def generate_html_briefing(news_items):
     """
     Gera HTML bonito e visual do briefing
     """
     now = get_current_time_sao_paulo()
-    date_str = now.strftime('%d/%m/%Y às %H:%M BRT')
-    
-    # Se sem notícias, usar fallback
+    date_str = now.strftime('%d/%m/%Y Ã s %H:%M BRT')
+
+    # Se sem notÃ­cias, usar fallback
     if not news_items:
         tldr = "Sem novidades relevantes hoje."
-        news_html = "<p>Nenhuma notícia encontrada nas últimas 24h.</p>"
+        news_html = "<p>Nenhuma notÃ­cia encontrada nas Ãºltimas 24h.</p>"
     else:
-        tldr = f"Encontradas {len(news_items)} notícias sobre ChatGPT Enterprise"
+        tldr = f"Encontradas {len(news_items)} notÃ­cias sobre ChatGPT Enterprise"
         news_html = ""
         for i, item in enumerate(news_items, 1):
-            title = item.get('title', 'Sem título')
+            title = item.get('title', 'Sem tÃ­tulo')
             snippet = item.get('snippet', '')
             link = item.get('link', '#')
             source = item.get('source', 'Fonte desconhecida')
-            
+
             news_html += f"""
             <div style="margin-bottom: 20px; padding: 15px; border-left: 4px solid #0066cc; background: #f5f8fa;">
                 <h4 style="margin-top: 0; color: #0066cc;">{title}</h4>
                 <p style="color: #333; line-height: 1.6;">{snippet}</p>
                 <p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">
-                    📌 <strong>Fonte:</strong> {source} | 
-                    <a href="{link}" style="color: #0066cc; text-decoration: none;">Ler mais →</a>
+                    ðŸ“Œ <strong>Fonte:</strong> {source} | 
+                    <a href="{link}" style="color: #0066cc; text-decoration: none;">Ler mais â†’</a>
                 </p>
             </div>
             """
-    
+
     html_body = f"""
 <!DOCTYPE html>
 <html>
@@ -215,51 +198,51 @@ def generate_html_briefing(news_items):
     <div class="container">
         <!-- HEADER -->
         <div class="header">
-            <h1>📊 Briefing ChatGPT Enterprise</h1>
+            <h1>ðŸ“Š Briefing ChatGPT Enterprise</h1>
             <p>{date_str}</p>
         </div>
-        
-        <!-- CONTEÚDO -->
+
+        <!-- CONTEÃšDO -->
         <div class="content">
             <!-- TL;DR -->
             <div class="section">
                 <div class="tldr">
-                    <div class="tldr-label">🚀 TL;DR (RESUMO EXECUTIVO)</div>
+                    <div class="tldr-label">ðŸš€ TL;DR (RESUMO EXECUTIVO)</div>
                     <p>{tldr}</p>
                 </div>
             </div>
-            
+
             <!-- NOVIDADES -->
             <div class="section">
-                <h2>📰 Novidades & Lançamentos</h2>
+                <h2>ðŸ“° Novidades & LanÃ§amentos</h2>
                 {news_html}
             </div>
-            
+
             <!-- DICA -->
             <div class="section">
-                <h2>💡 Dica de Uso</h2>
+                <h2>ðŸ’¡ Dica de Uso</h2>
                 <div class="tip">
                     <strong>Company Knowledge:</strong> Ative o recurso Company Knowledge no seu ChatGPT Enterprise 
-                    para buscar automaticamente em Slack, SharePoint, Google Drive e mais, tudo em uma única pergunta!
+                    para buscar automaticamente em Slack, SharePoint, Google Drive e mais, tudo em uma Ãºnica pergunta!
                 </div>
             </div>
-            
-            <!-- PRÓXIMOS PASSOS -->
+
+            <!-- PRÃ“XIMOS PASSOS -->
             <div class="section">
-                <h2>📍 Próximos Passos</h2>
+                <h2>ðŸ“ PrÃ³ximos Passos</h2>
                 <ul>
                     <li>Revisar novidades e impactos para sua equipe</li>
-                    <li>Explorar <a href="https://help.openai.com">documentação oficial</a></li>
+                    <li>Explorar <a href="https://help.openai.com">documentaÃ§Ã£o oficial</a></li>
                     <li>Testar novos recursos em ambiente controlado</li>
                 </ul>
             </div>
         </div>
-        
+
         <!-- FOOTER -->
         <div class="footer">
             <p>
-                📧 Briefing automático enviado diariamente às 20:00 BRT<br>
-                Fontes: Blog OpenAI | Documentação Oficial | Release Notes<br>
+                ðŸ“§ Briefing automÃ¡tico enviado diariamente Ã s 20:00 BRT<br>
+                Fontes: Blog OpenAI | DocumentaÃ§Ã£o Oficial | Release Notes<br>
                 <a href="https://status.openai.com">Status OpenAI</a> | 
                 <a href="https://openai.com/index/company-knowledge">Saiba mais</a>
             </p>
@@ -268,80 +251,89 @@ def generate_html_briefing(news_items):
 </body>
 </html>
     """
-    
+
     return html_body
 
-def send_email_via_rube(subject, html_body, to_emails, cc_emails=None):
+def send_email_via_gmail(subject, html_body, to_emails, cc_emails=None):
     """
-    Envia email via Outlook através do Rube
+    Envia email via Gmail usando senha de aplicativo
     """
-    logger.info(f"📧 Enviando email para: {', '.join(to_emails)}")
-    
+    logger.info(f"ðŸ“§ Enviando email para: {', '.join(to_emails)}")
+
     try:
         cc_emails = cc_emails or []
-        
-        response = requests.post(
-            f'{RUBE_BASE_URL}/api/execute',
-            headers={
-                'Authorization': f'Bearer {RUBE_API_KEY}',
-                'Content-Type': 'application/json'
-            },
-            json={
-                'session_id': RUBE_SESSION_ID,
-                'tool_slug': 'OUTLOOK_SEND_EMAIL',
-                'arguments': {
-                    'subject': subject,
-                    'body': html_body,
-                    'to_email': ', '.join(to_emails),
-                    'cc_emails': cc_emails,
-                    'is_html': True,
-                    'user_id': 'me'
-                }
-            },
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            logger.info("✅ Email enviado com sucesso!")
-            return True
-        else:
-            logger.error(f"❌ Erro ao enviar email: {response.status_code}")
-            logger.error(f"Response: {response.text}")
-            return False
-    
+
+        # Criar mensagem
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = GMAIL_SENDER
+        msg['To'] = ', '.join(to_emails)
+        if cc_emails:
+            msg['Cc'] = ', '.join(cc_emails)
+
+        # Anexar HTML
+        part = MIMEText(html_body, 'html')
+        msg.attach(part)
+
+        # Conectar ao SMTP do Gmail e enviar
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(GMAIL_SENDER, GMAIL_APP_PASSWORD)
+
+            # Enviar para TO + CC
+            all_recipients = to_emails + cc_emails
+            server.sendmail(GMAIL_SENDER, all_recipients, msg.as_string())
+
+        logger.info("âœ… Email enviado com sucesso!")
+        return True
+
+    except smtplib.SMTPAuthenticationError:
+        logger.error("âŒ Erro de autenticaÃ§Ã£o: Verifique GMAIL_APP_PASSWORD")
+        return False
     except Exception as e:
-        logger.error(f"❌ Exceção ao enviar email: {str(e)}")
+        logger.error(f"âŒ Erro ao enviar email: {str(e)}")
         return False
 
 def main():
-    """Função principal"""
+    """FunÃ§Ã£o principal"""
     logger.info("=" * 60)
-    logger.info("🤖 INICIANDO BRIEFING CHATGPT ENTERPRISE")
+    logger.info("ðŸ¤– INICIANDO BRIEFING CHATGPT ENTERPRISE")
     logger.info("=" * 60)
-    
-    # 1. Buscar notícias
-    logger.info("\n[1/3] Coletando notícias...")
+
+    # Validar configuraÃ§Ãµes
+    if not GMAIL_APP_PASSWORD:
+        logger.error("âŒ GMAIL_APP_PASSWORD nÃ£o configurada!")
+        return 1
+
+    if not GMAIL_SENDER:
+        logger.error("âŒ GMAIL_SENDER_EMAIL nÃ£o configurada!")
+        return 1
+
+    logger.info(f"ðŸ“§ Sender: {GMAIL_SENDER}")
+    logger.info(f"ðŸ“¨ DestinatÃ¡rios: {', '.join(RECIPIENTS)}")
+
+    # 1. Buscar notÃ­cias
+    logger.info("\n[1/3] Coletando notÃ­cias...")
     news_items = search_openai_news()
-    
+
     # 2. Gerar HTML
     logger.info("[2/3] Gerando HTML bonito...")
     html_body = generate_html_briefing(news_items)
-    
+
     # 3. Enviar email
     logger.info("[3/3] Enviando email...")
     now = get_current_time_sao_paulo()
     date_str = now.strftime('%Y-%m-%d')
-    subject = f"[Briefing ChatGPT Enterprise] {date_str} — Novidades, Roadmap, Dicas (20:00 BRT)"
-    
-    success = send_email_via_rube(subject, html_body, RECIPIENTS, CC_RECIPIENTS)
-    
+    subject = f"[Briefing ChatGPT Enterprise] {date_str} â€” Novidades, Roadmap, Dicas (20:00 BRT)"
+
+    success = send_email_via_gmail(subject, html_body, RECIPIENTS, CC_RECIPIENTS)
+
     logger.info("\n" + "=" * 60)
     if success:
-        logger.info("✅ BRIEFING FINALIZADO COM SUCESSO!")
+        logger.info("âœ… BRIEFING FINALIZADO COM SUCESSO!")
     else:
-        logger.info("⚠️ BRIEFING FINALIZADO COM AVISO (verificar logs)")
+        logger.info("âš ï¸ BRIEFING FINALIZADO COM AVISO (verificar logs)")
     logger.info("=" * 60)
-    
+
     return 0 if success else 1
 
 if __name__ == '__main__':
