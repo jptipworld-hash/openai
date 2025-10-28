@@ -26,13 +26,13 @@ jobs:
       
       - name: Send ChatGPT Enterprise Briefing
         env:
-          RUBE_API_KEY: ${{ secrets.RUBE_API_KEY }}
-          RUBE_SESSION_ID: ${{ secrets.RUBE_SESSION_ID }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_SENDER_EMAIL: ${{ secrets.GMAIL_SENDER_EMAIL }}
         run: python scripts/send_briefing.py
       
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: briefing-logs
           path: briefing_execution.log
